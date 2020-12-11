@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import tempfile
+import typing
 
 import psutil
 
@@ -166,7 +167,8 @@ def subprocess_func(func, pipe, logger, mem_in_mb, cpu_time_limit_in_s, wall_tim
 
 class enforce_limits(object):
     def __init__(self, mem_in_mb=None, cpu_time_in_s=None, wall_time_in_s=None, num_processes=None,
-                 grace_period_in_s=None, logger=None, capture_output=False, context=None):
+                 grace_period_in_s=None, logger=None, capture_output=False, context=None,
+                 tmp_dir: typing.Optional[str] = None):
 
         if context is None:
             self.context = multiprocessing.get_context()
@@ -180,6 +182,9 @@ class enforce_limits(object):
         self.grace_period_in_s = 0 if grace_period_in_s is None else grace_period_in_s
         self.logger = logger if logger is not None else self.context.get_logger()
         self.capture_output = capture_output
+        self.tmp_dir = None
+        if self.capture_output:
+            self.tmp_dir = tempfile.TemporaryDirectory(dir=tmp_dir)
 
         if self.mem_in_mb is not None:
             self.logger.debug("Restricting your function to {} mb memory.".format(self.mem_in_mb))
@@ -216,13 +221,6 @@ class enforce_limits(object):
                 parent_conn, child_conn = self.context.Pipe(False)
                 # import pdb; pdb.set_trace()
 
-                if self.capture_output:
-                    tmp_dir = tempfile.TemporaryDirectory()
-                    tmp_dir_name = tmp_dir.name
-
-                else:
-                    tmp_dir_name = None
-
                 # create and start the process
                 subproc = self.context.Process(
                     target=subprocess_func,
@@ -236,7 +234,7 @@ class enforce_limits(object):
                         self.wall_time_in_s,
                         self.num_processes,
                         self.grace_period_in_s,
-                        tmp_dir_name
+                        None if self.tmp_dir is None else self.tmp_dir.name
                     ) + args,
                     kwargs=kwargs,
                 )
@@ -284,12 +282,26 @@ class enforce_limits(object):
 
                     # recover stdout and stderr if requested
                     if self.capture_output:
-                        with open(os.path.join(tmp_dir.name, 'std.out'), 'r') as fh:
-                            self2.stdout = fh.read()
-                        with open(os.path.join(tmp_dir.name, 'std.err'), 'r') as fh:
-                            self2.stderr = fh.read()
+                        stdout_file = os.path.join(self.tmp_dir.name, 'std.out')
+                        if os.path.exists(stdout_file):
+                            with open(stdout_file, 'r') as fh:
+                                self2.stdout = fh.read()
+                        else:
+                            self.logger.critical("Failed to read from std.out the file {} on dir {}.".format(
+                                stdout_file,
+                                os.stat(os.path.dirname(stdout_file))
+                            ))
+                        stderror_file = os.path.join(self.tmp_dir.name, 'std.err')
+                        if stderror_file:
+                            with open(os.path.join(stderror_file, 'r') as fh:
+                                self2.stderr = fh.read()
+                        else:
+                            self.logger.critical("Failed to read from std.err the file {} on dir {}.".format(
+                                stderror_file,
+                                os.stat(os.path.dirname(stderror_file))
+                            ))
 
-                        tmp_dir.cleanup()
+                        self.tmp_dir.cleanup()
 
                     # don't leave zombies behind
                     subproc.join()
