@@ -329,6 +329,51 @@ class test_limit_resources_module(unittest.TestCase):
         self.assertIn('RuntimeError', wrapped_function.stderr)
         self.assertEqual(wrapped_function.exitcode, 1)
 
+    def test_capture_output_withdir(self):
+        print("Testing capturing of output.")
+        global logger
+
+        time_limit = 2
+        grace_period = 1
+
+        def print_and_sleep(t):
+            for i in range(t):
+                print(i)
+                time.sleep(1)
+
+        with self.assertRaisesRegex(FileNotFoundError, "No such file or directory"):
+            wrapped_function = pynisher.enforce_limits(
+                wall_time_in_s=time_limit, mem_in_mb=None,
+                tmp_dir='/tmp/dummydirnotexist',
+                grace_period_in_s=grace_period, logger=logger, capture_output=True
+            )(print_and_sleep)
+
+            wrapped_function(5)
+
+        wrapped_function = pynisher.enforce_limits(wall_time_in_s=time_limit, mem_in_mb=None,
+                                                   tmp_dir='/tmp/',
+                                                   grace_period_in_s=grace_period, logger=logger, capture_output=True)(
+            print_and_sleep)
+
+        wrapped_function(5)
+
+        self.assertTrue('0' in wrapped_function.stdout)
+        self.assertEqual(wrapped_function.stderr, '')
+        self.assertEqual(wrapped_function.exitcode, 0)
+
+        def print_and_fail():
+            print(0)
+            raise RuntimeError()
+
+        wrapped_function = pynisher.enforce_limits(wall_time_in_s=time_limit, mem_in_mb=None,
+                                                   grace_period_in_s=grace_period, logger=logger, capture_output=True)(
+            print_and_fail)
+
+        wrapped_function()
+
+        self.assertIn('0', wrapped_function.stdout)
+        self.assertIn('RuntimeError', wrapped_function.stderr)
+
     def test_too_little_memory(self):
         # Test what happens if the target process does not have a sufficiently high memory limit
 

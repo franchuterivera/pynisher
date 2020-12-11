@@ -292,8 +292,8 @@ class enforce_limits(object):
                                 os.stat(os.path.dirname(stdout_file))
                             ))
                         stderror_file = os.path.join(self.tmp_dir.name, 'std.err')
-                        if stderror_file:
-                            with open(os.path.join(stderror_file, 'r') as fh:
+                        if os.path.exists(stderror_file):
+                            with open(stderror_file, 'r') as fh:
                                 self2.stderr = fh.read()
                         else:
                             self.logger.critical("Failed to read from std.err the file {} on dir {}.".format(
