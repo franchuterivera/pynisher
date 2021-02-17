@@ -160,7 +160,9 @@ def subprocess_func(func, pipe, logger, mem_in_mb, cpu_time_limit_in_s, wall_tim
         finally:
             # recursively kill all children
             p = psutil.Process()
+            logger.debug(f"main processes = {vars(p)} {p.cmdline()}")
             for child in p.children(recursive=True):
+                logger.debug(f"children processes = {vars(child)} {child.cmdline()}")
                 child.kill()
 
 
@@ -277,6 +279,7 @@ class enforce_limits(object):
                 except: # noqa
                     self.logger.debug("Something else went wrong, sorry.")
                 finally:
+                    self.logger.debug(f"Function reached the finally of the pynisher")
                     self2.resources_function = resource.getrusage(resource.RUSAGE_CHILDREN)
                     self2.resources_pynisher = resource.getrusage(resource.RUSAGE_SELF)
                     self2.wall_clock_time = time.time() - start
@@ -305,6 +308,7 @@ class enforce_limits(object):
                     subproc.join()
                     # exitcode is only available after join
                     self2.exitcode = subproc.exitcode
+                    self.logger.debug(f"Function reached the finally-END of the pynisher")
                 return (self2.result)
 
         return (function_wrapper(func))
