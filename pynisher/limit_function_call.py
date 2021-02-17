@@ -54,6 +54,16 @@ class AnythingException(Exception):
     pass
 
 
+def killtree(pid, including_parent=True):
+    parent = psutil.Process(pid)
+    for child in parent.children(recursive=True):
+        print "child", child
+        child.kill()
+
+    if including_parent:
+        parent.kill()
+
+
 # create the function the subprocess can execute
 def subprocess_func(func, pipe, logger, mem_in_mb, cpu_time_limit_in_s, wall_time_limit_in_s, num_procs,
                     grace_period_in_s, tmp_dir, *args, **kwargs):
@@ -164,6 +174,8 @@ def subprocess_func(func, pipe, logger, mem_in_mb, cpu_time_limit_in_s, wall_tim
             for child in p.children(recursive=True):
                 logger.debug(f"children processes = {vars(child)} {child.cmdline()}")
                 child.kill()
+            # try dying hard
+            logger.debug(f"Got to kill class by process group")
 
 
 class enforce_limits(object):
@@ -263,10 +275,14 @@ class enforce_limits(object):
                     # read the return value
                     if (self.wall_time_in_s is not None):
                         if parent_conn.poll(self.wall_time_in_s + self.grace_period_in_s):
+                            self.logger.debug("Poll collennection started")
                             read_connection()
+                            self.logger.debug("Poll collennection finished")
                         else:
+                            self.logger.debug("terminate start")
                             subproc.terminate()
                             self2.exit_status = TimeoutException
+                            self.logger.debug("terminate finished")
 
                     else:
                         read_connection()
