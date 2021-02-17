@@ -321,7 +321,12 @@ class enforce_limits(object):
                         tmp_dir.cleanup()
 
                     # don't leave zombies behind
-                    subproc.join()
+                    #subproc.join()
+                    try:
+                        subproc.join(10)
+                    except Exception as e:
+                        self.logger.critical(f"Cannot join the process after 10 seconds {e}")
+                        killtree(subproc.pid)
                     # exitcode is only available after join
                     self2.exitcode = subproc.exitcode
                     self.logger.debug(f"Function reached the finally-END of the pynisher")
