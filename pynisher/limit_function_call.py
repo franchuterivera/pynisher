@@ -302,7 +302,29 @@ class enforce_limits(object):
                         tmp_dir.cleanup()
 
                     # don't leave zombies behind
-                    subproc.join()
+                    # Yet wait only up to a reasonable time for a process join()
+                    remaining_time = 5
+                    if self.cpu_time_in_s is not None:
+                        remaining_time = max(remaining_time,
+                                             self.cpu_time_in_s - self2.wall_clock_time)
+                    try:
+                        subproc.join(remaining_time)
+                    except Exception as e:
+                        current_process = psutil.Process()
+                        children = current_process.children(recursive=True)
+                        for childproc in children:
+                            os.kill(childproc.pid, 9)
+                        gone, alive = psutil.wait_procs(
+                            children,
+                            timeout=remaining_time)
+                        self.logger.error(
+                            "Cannot join the process after {} seconds. Manually terminated the "
+                            " process {} yet failed to remove {}: {} ".format(
+                                remaining_time,
+                                gone,
+                                alive,
+                                str(e),
+                            ))
                     # exitcode is only available after join
                     self2.exitcode = subproc.exitcode
                 return (self2.result)
